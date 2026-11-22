@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSD1306 128x64 OLED Dashboard & Joystick Firmware Generator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        oled: {
+                            bg: '#000000',
+                            blue: '#00f0ff',
+                            yellow: '#ffcc00',
+                            dim: '#005566',
+                            off: '#081215'
+                        },
+                        dark: {
+                            base: '#0f172a',
+                            panel: '#1e293b',
+                            border: '#334155'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"Fira Code"', 'monospace'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Pixel perfect styling for OLED canvas simulation */
+        canvas.oled-screen {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.25), inset 0 0 10px rgba(0, 0, 0, 0.9);
+        }
+        /* Custom scrollbar for dark mode code blocks */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Joystick Knob styling */
+        .joystick-base {
+            background: radial-gradient(circle at 30% 30%, #334155, #0f172a);
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .joystick-stick {
+            background: radial-gradient(circle at 35% 35%, #475569, #1e293b);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.2);
+            transition: transform 0.08s ease-out;
+        }
+        .joystick-stick:active {
+            transform: scale(0.92);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-black">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+                    <i class="fa-solid fa-microchip text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-white leading-none">SSD1306 OLED Studio</h1>
+                    <p class="text-xs text-slate-400 mt-1">128x64 Dashboard & Dual-Axis Joystick Firmware Generator</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Virtual I2C 0x3C
+                </span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono text-slate-400 bg-slate-800 border border-slate-700">
+                    128 x 64 px
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6">
+        
+        <!-- LEFT COLUMN: OLED Simulator & Controls -->
+        <div class="lg:w-5/12 flex flex-col gap-6">
+            
+            <!-- Virtual Hardware Box -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center">
+                <!-- OLED Display Frame Header -->
+                <div class="w-full flex items-center justify-between mb-3 text-xs text-slate-400 font-mono">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-tv text-cyan-400"></i> OLED DISPLAY SIMULATOR</span>
+                    <div class="flex items-center gap-2">
+                        <label class="cursor-pointer text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1">
+                            <input type="checkbox" id="color-theme-toggle" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0"> Yellow/Blue Header
+                        </label>
+                    </div>
+                </div>
+
+                <!-- OLED Canvas Screen -->
+                <div class="relative p-4 bg-slate-950 rounded-xl border border-slate-800/80 shadow-2xl flex justify-center items-center">
+                    <canvas id="oledCanvas" width="128" height="64" class="oled-screen w-[320px] h-[160px] sm:w-[384px] sm:h-[192px] rounded border border-cyan-900/50 cursor-pointer" title="128x64 SSD1306 Monochrome OLED"></canvas>
+                </div>
+
+                <!-- Simulator Instructions / Keyboard shortcuts -->
+                <div class="mt-4 w-full bg-slate-950/60 rounded-lg p-3 border border-slate-800 text-xs text-slate-400 flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-keyboard text-slate-500"></i>
+                        <span>Keys: <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded font-mono">↑</kbd><kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded font-mono">↓</kbd> Move | <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded font-mono">Enter</kbd> Select | <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded font-mono">←</kbd> Back</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Joystick Simulation Control Pad -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-gamepad text-cyan-400"></i> Analog Joystick Controller (HW Pin Simulation)
+                </h3>
+
+                <div class="flex flex-col sm:flex-row items-center justify-around gap-6">
+                    <!-- Physical Interactive Joystick Thumbstick -->
+                    <div class="relative flex flex-col items-center">
+                        <div id="joystickBase" class="joystick-base w-32 h-32 rounded-full border-2 border-slate-700 relative flex justify-center items-center touch-none cursor-grab active:cursor-grabbing">
+                            <!-- Crosshair guidelines -->
+                            <div class="absolute w-full h-[1px] bg-slate-800"></div>
+                            <div class="absolute h-full w-[1px] bg-slate-800"></div>
+                            <!-- Movable Joystick Stick -->
+                            <div id="joystickStick" class="joystick-stick w-14 h-14 rounded-full border border-slate-600 flex items-center justify-center text-slate-300 font-bold text-xs select-none z-10">
+                                SEL
+                            </div>
+                        </div>
+                        <span class="text-[11px] text-slate-400 mt-2 font-mono">Drag Stick or Click Center</span>
+                    </div>
+
+                    <!-- Discrete Directional Button Pad alternative -->
+                    <div class="grid grid-cols-3 gap-2 w-40">
+                        <div></div>
+                        <button id="btnUp" class="p-3 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-lg text-slate-200 font-bold text-sm transition border border-slate-700 flex justify-center items-center">
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </button>
+                        <div></div>
+                        
+                        <button id="btnLeft" class="p-3 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-lg text-slate-200 font-bold text-sm transition border border-slate-700 flex justify-center items-center" title="Back / Left">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <button id="btnSelect" class="p-3 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-400 rounded-lg text-white font-bold text-xs transition border border-cyan-400 shadow-lg shadow-cyan-950 flex justify-center items-center" title="Select / Click">
+                            SEL
+                        </button>
+                        <button id="btnRight" class="p-3 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-lg text-slate-200 font-bold text-sm transition border border-slate-700 flex justify-center items-center" title="Enter / Right">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+
+                        <div></div>
+                        <button id="btnDown" class="p-3 bg-slate-800 hover:bg-slate-700 active:bg-cyan-600 rounded-lg text-slate-200 font-bold text-sm transition border border-slate-700 flex justify-center items-center">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                        <div></div>
+                    </div>
+                </div>
+
+                <!-- Simulated ADC Readout -->
+                <div class="mt-5 grid grid-cols-3 gap-2 text-center text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">VRX (A0)</span>
+                        <span id="adcX" class="text-cyan-400 font-bold">512</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">VRY (A1)</span>
+                        <span id="adcY" class="text-cyan-400 font-bold">512</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">SW (D2)</span>
+                        <span id="adcSW" class="text-emerald-400 font-bold">HIGH</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Firmware Code & Hardware Wiring Guide -->
+        <div class="lg:w-7/12 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            
+            <!-- Tab Headers -->
+            <div class="flex border-b border-slate-800 bg-slate-950/80 px-4 pt-3">
+                <button id="tabBtnCode" onclick="switchTab('code')" class="px-4 py-2.5 text-xs sm:text-sm font-semibold text-cyan-400 border-b-2 border-cyan-400 flex items-center gap-2 transition">
+                    <i class="fa-solid fa-code"></i> Arduino / ESP32 Code (.ino)
+                </button>
+                <button id="tabBtnWiring" onclick="switchTab('wiring')" class="px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition">
+                    <i class="fa-solid fa-plug"></i> Circuit Wiring & Hardware Setup
+                </button>
+                <button id="tabBtnTroubleshooting" onclick="switchTab('troubleshoot')" class="px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition">
+                    <i class="fa-solid fa-vial-circle-check"></i> Hardware Diagnostic Guide
+                </button>
+            </div>
+
+            <!-- Tab Content 1: Arduino Firmware Code -->
+            <div id="tabContentCode" class="p-4 flex-1 flex flex-col min-h-[480px]">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-2">
+                        <select id="boardSelector" class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded px-2.5 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="arduino">Board: Arduino Uno / Nano / Mega (5V ADC)</option>
+                            <option value="esp32">Board: ESP32 / ESP8266 (3.3V ADC)</option>
+                        </select>
+                    </div>
+                    <button id="copyCodeBtn" onclick="copyCodeToClipboard()" class="px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fa-regular fa-copy"></i> Copy Complete Sketch
+                    </button>
+                </div>
+                
+                <div class="relative flex-1 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+                    <pre class="h-full p-4 text-xs font-mono text-slate-300 overflow-auto leading-relaxed"><code id="codeBlock">
+<!-- Dynamically populated via JS -->
+                    </code></pre>
+                </div>
+            </div>
+
+            <!-- Tab Content 2: Wiring Diagram & Pin Maps -->
+            <div id="tabContentWiring" class="p-6 hidden flex-1 space-y-6 overflow-y-auto max-h-[600px]">
+                <div>
+                    <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-diagram-project text-cyan-400"></i> Hardware Interconnection Diagram
+                    </h3>
+                    <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                        Connect your 0.96" SSD1306 128x64 OLED display module (I2C interface) and standard 2-Axis analog joystick module (KY-023 / Dual-axis PS2 Thumbstick) as shown below.
+                    </p>
+                </div>
+
+                <!-- Arduino Uno Wiring Table -->
+                <div class="bg-slate-950 rounded-xl border border-slate-800 p-4">
+                    <h4 class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-microchip"></i> Option 1: Arduino Uno / Nano Pin Mapping
+                    </h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left text-slate-300 font-mono">
+                            <thead class="bg-slate-900 text-slate-400 uppercase text-[10px]">
+                                <tr>
+                                    <th class="p-2">Component</th>
+                                    <th class="p-2">Component Pin</th>
+                                    <th class="p-2">Arduino Uno Pin</th>
+                                    <th class="p-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800">
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">VCC</td><td class="p-2 text-cyan-300">5V / 3.3V</td><td class="p-2 text-slate-400">Power Input</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">GND</td><td class="p-2 text-cyan-300">GND</td><td class="p-2 text-slate-400">Ground Reference</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">SCL / SCK</td><td class="p-2 text-cyan-300">A5</td><td class="p-2 text-slate-400">I2C Serial Clock</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">SDA</td><td class="p-2 text-cyan-300">A4</td><td class="p-2 text-slate-400">I2C Serial Data</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">VCC / +5V</td><td class="p-2 text-cyan-300">5V</td><td class="p-2 text-slate-400">Power Input</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">GND</td><td class="p-2 text-cyan-300">GND</td><td class="p-2 text-slate-400">Ground Reference</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">VRX / HORIZ</td><td class="p-2 text-cyan-300">A0</td><td class="p-2 text-slate-400">Analog X-Axis Pin</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">VRY / VERT</td><td class="p-2 text-cyan-300">A1</td><td class="p-2 text-slate-400">Analog Y-Axis Pin</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">SW / SEL</td><td class="p-2 text-cyan-300">D2</td><td class="p-2 text-slate-400">Pushbutton (INPUT_PULLUP)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ESP32 Wiring Table -->
+                <div class="bg-slate-950 rounded-xl border border-slate-800 p-4">
+                    <h4 class="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-wifi"></i> Option 2: ESP32 DevKit V1 Pin Mapping
+                    </h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left text-slate-300 font-mono">
+                            <thead class="bg-slate-900 text-slate-400 uppercase text-[10px]">
+                                <tr>
+                                    <th class="p-2">Component</th>
+                                    <th class="p-2">Component Pin</th>
+                                    <th class="p-2">ESP32 Pin</th>
+                                    <th class="p-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800">
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">VCC</td><td class="p-2 text-purple-300">3.3V</td><td class="p-2 text-slate-400">3.3V Supply Pin</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">GND</td><td class="p-2 text-purple-300">GND</td><td class="p-2 text-slate-400">Ground</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">SCL</td><td class="p-2 text-purple-300">GPIO 22</td><td class="p-2 text-slate-400">I2C Clock</td></tr>
+                                <tr><td class="p-2 font-bold text-yellow-400">OLED Display</td><td class="p-2">SDA</td><td class="p-2 text-purple-300">GPIO 21</td><td class="p-2 text-slate-400">I2C Data</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">VRX</td><td class="p-2 text-purple-300">GPIO 34 (ADC1)</td><td class="p-2 text-slate-400">Analog Read</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">VRY</td><td class="p-2 text-purple-300">GPIO 35 (ADC1)</td><td class="p-2 text-slate-400">Analog Read</td></tr>
+                                <tr><td class="p-2 font-bold text-emerald-400">Joystick Module</td><td class="p-2">SW</td><td class="p-2 text-purple-300">GPIO 32</td><td class="p-2 text-slate-400">Internal Pullup Active</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content 3: Troubleshooting -->
+            <div id="tabContentTroubleshoot" class="p-6 hidden flex-1 space-y-4 overflow-y-auto max-h-[600px]">
+                <h3 class="text-base font-semibold text-white mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-wrench text-amber-400"></i> OLED & Joystick Hardware Diagnostic Checklist
+                </h3>
+                
+                <div class="space-y-3">
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h4 class="text-xs font-bold text-amber-400 flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> 1. Display Screen is Completely Black / Off
+                        </h4>
+                        <ul class="list-disc list-inside text-xs text-slate-300 space-y-1 font-mono">
+                            <li>Verify I2C address in code: most 0.96" OLEDs use <code class="text-cyan-400">0x3C</code>, but some use <code class="text-cyan-400">0x3D</code>.</li>
+                            <li>Ensure you pass <code class="text-cyan-400">SSD1306_SWITCHCAPVCC</code> in setup to turn on internal charge pump.</li>
+                            <li>Check for inverted VCC/GND labeling on cheap breakout boards! Swapping power pins will destroy the SSD1306 IC.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-sliders"></i> 2. Joystick Cursor Moves Erratically or Inverted
+                        </h4>
+                        <ul class="list-disc list-inside text-xs text-slate-300 space-y-1 font-mono">
+                            <li>Standard analog joysticks idle around ADC midpoint ~512 (or ~2048 on ESP32 12-bit ADC).</li>
+                            <li>If moving UP scrolls DOWN, swap the thresholds in firmware or swap VRX/VRY wires.</li>
+                            <li>Make sure to use <code class="text-cyan-400">INPUT_PULLUP</code> on the SEL button pin since SW shorts to GND when pressed.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h4 class="text-xs font-bold text-emerald-400 flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-boxes-packing"></i> 3. Required Arduino Libraries
+                        </h4>
+                        <p class="text-xs text-slate-300 font-mono">
+                            Install these libraries via standard Arduino Library Manager (<kbd class="px-1 py-0.5 bg-slate-800 rounded">Ctrl+Shift+I</kbd>):
+                        </p>
+                        <ul class="list-disc list-inside text-xs text-slate-400 font-mono mt-2 space-y-0.5">
+                            <li><strong class="text-white">Adafruit SSD1306</strong> by Adafruit</li>
+                            <li><strong class="text-white">Adafruit GFX Library</strong> by Adafruit</li>
+                            <li><strong class="text-white">Wire</strong> (Built-in Arduino standard library)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic & OLED Rendering Engine -->
+    <script>
+        // --- STATE MANAGEMENT ---
+        const STATE = {
+            currentScreen: 'MENU', // 'MENU' or 'DASHBOARD_0' ... 'DASHBOARD_4'
+            menuIndex: 0,
+            colorTheme: 'yellow-blue', // 'yellow-blue' or 'monochrome'
+            menuItems: [
+                { id: 0, title: "1. System Overview", icon: "fa-server" },
+                { id: 1, title: "2. Environment Mon", icon: "fa-temperature-high" },
+                { id: 2, title: "3. Power & Battery", icon: "fa-battery-three-quarters" },
+                { id: 3, title: "4. Sensor Graphs", icon: "fa-chart-line" },
+                { id: 4, title: "5. Hardware Status", icon: "fa-microchip" }
+            ],
+            // Simulated live sensor data
+            sensors: {
+                cpuTemp: 42.5,
+                ramUsage: 64,
+                uptimeSec: 128,
+                wifiRssi: -62,
+                tempC: 24.8,
+                humidity: 55,
+                aqi: 32,
+                pressure: 1013,
+                batteryVoltage: 3.84,
+                currentDrawmA: 145,
+                batteryPct: 78,
+                solarInput: 4.9,
+                adcBuffer: new Array(60).fill(32)
+            },
+            // Virtual Joystick ADC values
+            joystick: {
+                x: 512,
+                y: 512,
+                sw: true // HIGH = Not Pressed (Pullup)
+            }
+        };
+
+        // --- CANVAS ENGINE (128x64 OLED) ---
+        const canvas = document.getElementById('oledCanvas');
+        const ctx = canvas.getContext('2d');
+        const SCREEN_WIDTH = 128;
+        const SCREEN_HEIGHT = 64;
+
+        // Custom Pixel font / rendering parameters
+        const PIXEL_ON_BLUE = '#00f0ff';
+        const PIXEL_ON_YELLOW = '#ffcc00';
+        const PIXEL_OFF = '#081215';
+
+        // --- INIT SIMULATOR LOOP ---
+        window.onload = () => {
+            initJoystickControls();
+            initKeyboardEvents();
+            updateCodeSnippet('arduino');
+            
+            // Sensor Simulation Loop
+            setInterval(updateSimulatedSensors, 100);
+            
+            // 30 FPS Canvas Renderer
+            requestAnimationFrame(renderLoop);
+        };
+
+        // Render loop for OLED
+        function renderLoop() {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            if (STATE.currentScreen === 'MENU') {
+                drawMainMenu();
+            } else {
+                switch(STATE.currentScreen) {
+                    case 'DASHBOARD_0': drawDashboardSystem(); break;
+                    case 'DASHBOARD_1': drawDashboardEnvironment(); break;
+                    case 'DASHBOARD_2': drawDashboardPower(); break;
+                    case 'DASHBOARD_3': drawDashboardGraphs(); break;
+                    case 'DASHBOARD_4': drawDashboardHardware(); break;
+                }
+            }
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        // Color helper based on pixel Y position (Yellow header top 16px if yellow-blue theme active)
+        function getPixelColor(y) {
+            if (STATE.colorTheme === 'yellow-blue') {
+                return y < 16 ? PIXEL_ON_YELLOW : PIXEL_ON_BLUE;
+            }
+            return PIXEL_ON_BLUE;
+        }
+
+        // --- OLED RENDERING HELPER FUNCTIONS ---
+        function drawHeader(title) {
+            const headerColor = getPixelColor(0);
+            ctx.fillStyle = headerColor;
+            ctx.fillRect(0, 0, 128, 14);
+            
+            // Header text inverted (black on yellow/blue bg)
+            ctx.fillStyle = '#000000';
+            ctx.font = '9px monospace';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(title.substring(0, 18), 3, 7);
+
+            // Divider Line
+            ctx.fillStyle = getPixelColor(15);
+            ctx.fillRect(0, 15, 128, 1);
+        }
+
+        function drawMainMenu() {
+            drawHeader("MAIN MENU (JOYSTICK)");
+
+            const itemHeight = 9;
+            const startY = 18;
+            
+            STATE.menuItems.forEach((item, index) => {
+                const y = startY + (index * itemHeight);
+                const isSelected = index === STATE.menuIndex;
+                const textColor = getPixelColor(y);
+
+                if (isSelected) {
+                    // Highlight box
+                    ctx.fillStyle = textColor;
+                    ctx.fillRect(2, y - 1, 124, itemHeight - 1);
+                    
+                    // Black text for selected row
+                    ctx.fillStyle = '#000000';
+                    ctx.font = '8px monospace';
+                    ctx.fillText(`> ${item.title}`, 4, y + 5);
+                } else {
+                    // Regular item
+                    ctx.fillStyle = textColor;
+                    ctx.font = '8px monospace';
+                    ctx.fillText(`  ${item.title}`, 4, y + 5);
+                }
+            });
+        }
+
+        // --- DASHBOARD 1: SYSTEM OVERVIEW ---
+        function drawDashboardSystem() {
+            drawHeader("1. SYSTEM OVERVIEW");
+            
+            const color = getPixelColor(20);
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+            
+            // System Uptime & CPU
+            ctx.fillText(`CPU Temp : ${STATE.sensors.cpuTemp.toFixed(1)} C`, 4, 25);
+            ctx.fillText(`RAM Usage: ${STATE.sensors.ramUsage}%`, 4, 35);
+            
+            // RAM Bar graph
+            ctx.strokeStyle = color;
+            ctx.strokeRect(4, 38, 120, 5);
+            ctx.fillRect(4, 38, (120 * STATE.sensors.ramUsage) / 100, 5);
+
+            // WiFi & Uptime
+            ctx.fillText(`Uptime   : ${Math.floor(STATE.sensors.uptimeSec)}s`, 4, 52);
+            ctx.fillText(`WiFi RSSI: ${STATE.sensors.wifiRssi}dBm`, 4, 60);
+        }
+
+        // --- DASHBOARD 2: ENVIRONMENT MONITOR ---
+        function drawDashboardEnvironment() {
+            drawHeader("2. ENVIRONMENT");
+
+            const color = getPixelColor(20);
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+
+            ctx.fillText(`Temp: ${STATE.sensors.tempC.toFixed(1)}C`, 4, 26);
+            ctx.fillText(`Humi: ${STATE.sensors.humidity}%`, 68, 26);
+
+            ctx.fillText(`Pres: ${STATE.sensors.pressure} hPa`, 4, 38);
+            ctx.fillText(`AQI : ${STATE.sensors.aqi} (Good)`, 4, 50);
+
+            // Air Quality Bar
+            ctx.strokeRect(4, 54, 120, 5);
+            ctx.fillRect(4, 54, Math.min(120, STATE.sensors.aqi * 1.2), 5);
+        }
+
+        // --- DASHBOARD 3: POWER & BATTERY ---
+        function drawDashboardPower() {
+            drawHeader("3. POWER & BATTERY");
+
+            const color = getPixelColor(20);
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+
+            // Battery Icon & Pct
+            ctx.fillText(`Batt: ${STATE.sensors.batteryVoltage.toFixed(2)}V (${STATE.sensors.batteryPct}%)`, 4, 26);
+            
+            // Outer battery frame
+            ctx.strokeRect(4, 31, 100, 10);
+            ctx.fillRect(104, 34, 3, 4); // Battery tip
+            // Charge fill
+            ctx.fillRect(6, 33, (96 * STATE.sensors.batteryPct) / 100, 6);
+
+            ctx.fillText(`Current: ${STATE.sensors.currentDrawmA} mA`, 4, 50);
+            ctx.fillText(`Solar  : ${STATE.sensors.solarInput.toFixed(1)} V`, 4, 60);
+        }
+
+        // --- DASHBOARD 4: REAL-TIME GRAPH ---
+        function drawDashboardGraphs() {
+            drawHeader("4. ADC SPARKLINE");
+
+            const color = getPixelColor(20);
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+            ctx.fillText(`Raw A0: ${STATE.joystick.y}`, 4, 23);
+
+            // Oscilloscope box frame
+            ctx.strokeStyle = color;
+            ctx.strokeRect(4, 26, 120, 36);
+
+            // Draw line graph from buffer
+            ctx.beginPath();
+            const buf = STATE.sensors.adcBuffer;
+            for (let i = 0; i < buf.length; i++) {
+                const x = 5 + (i * 118 / buf.length);
+                const y = 60 - ((buf[i] / 64) * 30);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        // --- DASHBOARD 5: HARDWARE STATUS ---
+        function drawDashboardHardware() {
+            drawHeader("5. HW STATUS & I2C");
+
+            const color = getPixelColor(20);
+            ctx.fillStyle = color;
+            ctx.font = '8px monospace';
+
+            ctx.fillText(`I2C Bus: 0x3C FOUND`, 4, 26);
+            ctx.fillText(`Joy X: ${STATE.joystick.x} Y: ${STATE.joystick.y}`, 4, 37);
+            ctx.fillText(`Btn SW: ${STATE.joystick.sw ? "HIGH (RELEASED)" : "LOW (PRESSED)"}`, 4, 48);
+
+            ctx.fillText(`SRAM Free: 1420 bytes`, 4, 59);
+        }
+
+        // --- SIMULATED SENSORS UPDATE LOGIC ---
+        function updateSimulatedSensors() {
+            STATE.sensors.uptimeSec += 0.1;
+            STATE.sensors.cpuTemp = 42.0 + Math.sin(Date.now() / 2000) * 2.5;
+            STATE.sensors.ramUsage = Math.min(95, Math.max(40, STATE.sensors.ramUsage + (Math.random() * 2 - 1)));
+            
+            // Update Sparkline graph buffer with current joystick position
+            const normalizedY = (STATE.joystick.y / 1024) * 64;
+            STATE.sensors.adcBuffer.push(normalizedY);
+            if (STATE.sensors.adcBuffer.length > 60) {
+                STATE.sensors.adcBuffer.shift();
+            }
+        }
+
+        // --- CONTROLLER NAVIGATION ACTIONS ---
+        function actionUp() {
+            if (STATE.currentScreen === 'MENU') {
+                STATE.menuIndex = (STATE.menuIndex - 1 + STATE.menuItems.length) % STATE.menuItems.length;
+            }
+        }
+
+        function actionDown() {
+            if (STATE.currentScreen === 'MENU') {
+                STATE.menuIndex = (STATE.menuIndex + 1) % STATE.menuItems.length;
+            }
+        }
+
+        function actionSelect() {
+            if (STATE.currentScreen === 'MENU') {
+                STATE.currentScreen = `DASHBOARD_${STATE.menuIndex}`;
+            } else {
+                STATE.currentScreen = 'MENU';
+            }
+        }
+
+        function actionBack() {
+            STATE.currentScreen = 'MENU';
+        }
+
+        // --- JOYSTICK INTERACT & DRAG SIMULATOR ---
+        function initJoystickControls() {
+            const base = document.getElementById('joystickBase');
+            const stick = document.getElementById('joystickStick');
+            const adcXEl = document.getElementById('adcX');
+            const adcYEl = document.getElementById('adcY');
+            const adcSWEl = document.getElementById('adcSW');
+
+            let isDragging = false;
+            let center = { x: 0, y: 0 };
+            const maxRadius = 35;
+
+            function updateJoystickPosition(clientX, clientY) {
+                const dx = clientX - center.x;
+                const dy = clientY - center.y;
+                const dist = Math.hypot(dx, dy);
+                const angle = Math.atan2(dy, dx);
+
+                const clampedDist = Math.min(dist, maxRadius);
+                const stickX = Math.cos(angle) * clampedDist;
+                const stickY = Math.sin(angle) * clampedDist;
+
+                stick.style.transform = `translate(${stickX}px, ${stickY}px)`;
+
+                // Map -35..35 to 0..1023 ADC range
+                const rawX = Math.round(512 + (stickX / maxRadius) * 512);
+                const rawY = Math.round(512 + (stickY / maxRadius) * 512);
+
+                STATE.joystick.x = rawX;
+                STATE.joystick.y = rawY;
+
+                adcXEl.textContent = rawX;
+                adcYEl.textContent = rawY;
+
+                // Threshold navigation triggers
+                if (rawY < 200) { actionUp(); }
+                else if (rawY > 800) { actionDown(); }
+                if (rawX < 200) { actionBack(); }
+            }
+
+            function resetStick() {
+                stick.style.transform = `translate(0px, 0px)`;
+                STATE.joystick.x = 512;
+                STATE.joystick.y = 512;
+                adcXEl.textContent = 512;
+                adcYEl.textContent = 512;
+            }
+
+            base.addEventListener('pointerdown', (e) => {
+                isDragging = true;
+                const rect = base.getBoundingClientRect();
+                center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                base.setPointerCapture(e.pointerId);
+                updateJoystickPosition(e.clientX, e.clientY);
+            });
+
+            base.addEventListener('pointermove', (e) => {
+                if (isDragging) updateJoystickPosition(e.clientX, e.clientY);
+            });
+
+            const stopDrag = (e) => {
+                if (isDragging) {
+                    isDragging = false;
+                    resetStick();
+                }
+            };
+
+            base.addEventListener('pointerup', stopDrag);
+            base.addEventListener('pointercancel', stopDrag);
+
+            // Click middle button (SW Pin)
+            stick.addEventListener('click', (e) => {
+                e.stopPropagation();
+                STATE.joystick.sw = false;
+                adcSWEl.textContent = "LOW (PRESSED)";
+                adcSWEl.className = "text-red-400 font-bold";
+                actionSelect();
+                
+                setTimeout(() => {
+                    STATE.joystick.sw = true;
+                    adcSWEl.textContent = "HIGH";
+                    adcSWEl.className = "text-emerald-400 font-bold";
+                }, 200);
+            });
+
+            // Button Pad Click Listeners
+            document.getElementById('btnUp').onclick = () => actionUp();
+            document.getElementById('btnDown').onclick = () => actionDown();
+            document.getElementById('btnLeft').onclick = () => actionBack();
+            document.getElementById('btnRight').onclick = () => actionSelect();
+            document.getElementById('btnSelect').onclick = () => actionSelect();
+
+            // Screen Color Mode Toggle
+            document.getElementById('color-theme-toggle').onchange = (e) => {
+                STATE.colorTheme = e.target.checked ? 'yellow-blue' : 'monochrome';
+            };
+        }
+
+        // Keyboard Shortcut Navigation
+        function initKeyboardEvents() {
+            window.addEventListener('keydown', (e) => {
+                switch(e.key) {
+                    case 'ArrowUp': actionUp(); e.preventDefault(); break;
+                    case 'ArrowDown': actionDown(); e.preventDefault(); break;
+                    case 'ArrowLeft': actionBack(); e.preventDefault(); break;
+                    case 'ArrowRight':
+                    case 'Enter':
+                    case ' ':
+                        actionSelect(); e.preventDefault(); break;
+                }
+            });
+        }
+
+        // --- TAB SWITCHING ---
+        function switchTab(tabName) {
+            const tabs = ['Code', 'Wiring', 'Troubleshoot'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tabBtn${t}`);
+                const content = document.getElementById(`tabContent${t}`);
+                if (t.toLowerCase() === tabName.toLowerCase()) {
+                    btn.className = "px-4 py-2.5 text-xs sm:text-sm font-semibold text-cyan-400 border-b-2 border-cyan-400 flex items-center gap-2 transition";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- DYNAMIC CODE GENERATOR (.INO SKETCH) ---
+        const boardSelect = document.getElementById('boardSelector');
+        boardSelect.addEventListener('change', (e) => {
+            updateCodeSnippet(e.target.value);
+        });
+
+        function updateCodeSnippet(boardType) {
+            const isESP32 = boardType === 'esp32';
+            
+            const code = `/*
+ * SSD1306 128x64 OLED Menu System & Analog Joystick Firmware
+ * Compatible with: ${isESP32 ? 'ESP32 / ESP8266 (3.3V ADC)' : 'Arduino Uno / Nano / Mega (5V ADC)'}
+ * 
+ * Hardware Required:
+ * - 0.96" I2C SSD1306 128x64 OLED Display (Address: 0x3C)
+ * - 2-Axis Analog Joystick Module with Push Button
+ */
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// --- DISPLAY CONFIGURATION ---
+#define SCREEN_WIDTH  128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64  // OLED display height, in pixels
+#define OLED_RESET    -1  // Reset pin # (or -1 if sharing Arduino reset pin)
+#define OLED_ADDRESS  0x3C // Common addresses: 0x3C or 0x3D
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// --- HARDWARE PIN ASSIGNMENTS ---
+${isESP32 ? `
+#define JOY_X_PIN  34  // Analog pin for Joystick X-Axis (VRX)
+#define JOY_Y_PIN  35  // Analog pin for Joystick Y-Axis (VRY)
+#define JOY_SW_PIN 32  // Digital pin for Joystick Push Button (SW)
+#define ADC_MAX    4095 // 12-bit ADC on ESP32
+` : `
+#define JOY_X_PIN  A0  // Analog pin for Joystick X-Axis (VRX)
+#define JOY_Y_PIN  A1  // Analog pin for Joystick Y-Axis (VRY)
+#define JOY_SW_PIN 2   // Digital pin for Joystick Push Button (SW)
+#define ADC_MAX    1023 // 10-bit ADC on Arduino Uno
+`}
+
+// Threshold definitions for joystick movement
+#define JOY_THRESHOLD_LOW   (ADC_MAX * 0.2)
+#define JOY_THRESHOLD_HIGH  (ADC_MAX * 0.8)
+
+// --- SYSTEM STATES ---
+enum ScreenState {
+  MENU,
+  DASH_SYSTEM,
+  DASH_ENVIRONMENT,
+  DASH_POWER,
+  DASH_GRAPH,
+  DASH_HARDWARE
+};
+
+ScreenState currentScreen = MENU;
+int menuIndex = 0;
+const int TOTAL_MENU_ITEMS = 5;
+
+const char* menuItems[] = {
+  "1. System Overview",
+  "2. Environment Mon",
+  "3. Power & Battery",
+  "4. Sensor Graphs",
+  "5. Hardware Status"
+};
+
+// Real-time sensor graph buffer
+int graphBuffer[60];
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 200; // Joystick debounce delay ms
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize Joystick Button with internal pullup
+  pinMode(JOY_SW_PIN, INPUT_PULLUP);
+
+  // Initialize OLED Display
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    Serial.println(F("SSD1306 allocation failed. Check wiring/address!"));
+    for (;;); // Stop execution if screen fails
+  }
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.display();
+
+  // Pre-fill graph buffer
+  for(int i=0; i<60; i++) graphBuffer[i] = 32;
+}
+
+void loop() {
+  handleJoystickInput();
+  renderScreen();
+  delay(30); // ~33 FPS Refresh Rate
+}
+
+// --- INPUT PROCESSING ---
+void handleJoystickInput() {
+  int rawX = analogRead(JOY_X_PIN);
+  int rawY = analogRead(JOY_Y_PIN);
+  bool buttonPressed = (digitalRead(JOY_SW_PIN) == LOW);
+
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - lastDebounceTime > debounceDelay) {
+    
+    // Joystick Vertical Scrolling (Y-Axis)
+    if (rawY < JOY_THRESHOLD_LOW) { // Push UP
+      if (currentScreen == MENU) {
+        menuIndex--;
+        if (menuIndex < 0) menuIndex = TOTAL_MENU_ITEMS - 1;
+      }
+      lastDebounceTime = currentMillis;
+    } 
+    else if (rawY > JOY_THRESHOLD_HIGH) { // Push DOWN
+      if (currentScreen == MENU) {
+        menuIndex++;
+        if (menuIndex >= TOTAL_MENU_ITEMS) menuIndex = 0;
+      }
+      lastDebounceTime = currentMillis;
+    }
+
+    // Joystick Left (Back Action)
+    if (rawX < JOY_THRESHOLD_LOW) {
+      currentScreen = MENU;
+      lastDebounceTime = currentMillis;
+    }
+
+    // Joystick Center Click / Select Button
+    if (buttonPressed) {
+      if (currentScreen == MENU) {
+        currentScreen = (ScreenState)(menuIndex + 1);
+      } else {
+        currentScreen = MENU; // Return to main menu
+      }
+      lastDebounceTime = currentMillis;
+    }
+  }
+
+  // Update real-time sparkline buffer
+  static unsigned long lastGraphUpdate = 0;
+  if (currentMillis - lastGraphUpdate > 100) {
+    for (int i = 0; i < 59; i++) graphBuffer[i] = graphBuffer[i + 1];
+    graphBuffer[59] = map(rawY, 0, ADC_MAX, 0, 30);
+    lastGraphUpdate = currentMillis;
+  }
+}
+
+// --- RENDER ROUTINES ---
+void renderScreen() {
+  display.clearDisplay();
+
+  switch (currentScreen) {
+    case MENU:             drawMenu(); break;
+    case DASH_SYSTEM:      drawSystemDashboard(); break;
+    case DASH_ENVIRONMENT: drawEnvironmentDashboard(); break;
+    case DASH_POWER:       drawPowerDashboard(); break;
+    case DASH_GRAPH:       drawGraphDashboard(); break;
+    case DASH_HARDWARE:    drawHardwareDashboard(); break;
+  }
+
+  display.display();
+}
+
+void drawHeader(const char* title) {
+  display.fillRect(0, 0, 128, 13, SSD1306_WHITE);
+  display.setTextColor(SSD1306_BLACK);
+  display.setTextSize(1);
+  display.setCursor(3, 3);
+  display.print(title);
+  display.setTextColor(SSD1306_WHITE);
+  display.drawLine(0, 14, 128, 14, SSD1306_WHITE);
+}
+
+void drawMenu() {
+  drawHeader("MAIN MENU (JOYSTICK)");
+
+  int startY = 18;
+  int itemHeight = 9;
+
+  for (int i = 0; i < TOTAL_MENU_ITEMS; i++) {
+    int y = startY + (i * itemHeight);
+    if (i == menuIndex) {
+      display.fillRect(2, y - 1, 124, itemHeight, SSD1306_WHITE);
+      display.setTextColor(SSD1306_BLACK);
+      display.setCursor(4, y);
+      display.print("> ");
+      display.print(menuItems[i]);
+      display.setTextColor(SSD1306_WHITE);
+    } else {
+      display.setCursor(12, y);
+      display.print(menuItems[i]);
+    }
+  }
+}
+
+void drawSystemDashboard() {
+  drawHeader("1. SYSTEM OVERVIEW");
+  display.setCursor(4, 22);
+  display.print("CPU Temp : 42.5 C");
+  display.setCursor(4, 32);
+  display.print("RAM Usage: 64%");
+  display.drawRect(4, 42, 120, 6, SSD1306_WHITE);
+  display.fillRect(4, 42, 76, 6, SSD1306_WHITE);
+  display.setCursor(4, 52);
+  display.print("WiFi RSSI: -62 dBm");
+}
+
+void drawEnvironmentDashboard() {
+  drawHeader("2. ENVIRONMENT");
+  display.setCursor(4, 24);
+  display.print("Temp: 24.8 C");
+  display.setCursor(4, 36);
+  display.print("Humi: 55 %");
+  display.setCursor(4, 48);
+  display.print("Pres: 1013 hPa");
+}
+
+void drawPowerDashboard() {
+  drawHeader("3. POWER & BATTERY");
+  display.setCursor(4, 22);
+  display.print("Batt: 3.84V (78%)");
+  display.drawRect(4, 33, 100, 10, SSD1306_WHITE);
+  display.fillRect(104, 36, 3, 4, SSD1306_WHITE);
+  display.fillRect(6, 35, 75, 6, SSD1306_WHITE);
+  display.setCursor(4, 50);
+  display.print("Current: 145 mA");
+}
+
+void drawGraphDashboard() {
+  drawHeader("4. ADC SPARKLINE");
+  display.drawRect(4, 20, 120, 38, SSD1306_WHITE);
+
+  for (int i = 0; i < 59; i++) {
+    int x1 = 5 + (i * 118 / 60);
+    int y1 = 55 - graphBuffer[i];
+    int x2 = 5 + ((i + 1) * 118 / 60);
+    int y2 = 55 - graphBuffer[i + 1];
+    display.drawLine(x1, y1, x2, y2, SSD1306_WHITE);
+  }
+}
+
+void drawHardwareDashboard() {
+  drawHeader("5. HW STATUS & I2C");
+  display.setCursor(4, 24);
+  display.print("I2C Address: 0x3C");
+  display.setCursor(4, 36);
+  display.print("Joystick: Active");
+  display.setCursor(4, 48);
+  display.print("SRAM Free: 1420 B");
+}
+`;
+            document.getElementById('codeBlock').textContent = code;
+        }
+
+        // Copy Code Helper
+        function copyCodeToClipboard() {
+            const codeText = document.getElementById('codeBlock').textContent;
+            const textArea = document.createElement("textarea");
+            textArea.value = codeText;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            const copyBtn = document.getElementById('copyCodeBtn');
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> Copied to Clipboard!`;
+            copyBtn.className = "px-3 py-1.5 bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition";
+
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+                copyBtn.className = "px-3 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 rounded text-xs font-semibold flex items-center gap-1.5 transition";
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
